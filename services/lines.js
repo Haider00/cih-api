@@ -1,56 +1,80 @@
 const router = require("express").Router();
 const { mysqlConnection } = require("../utils/connection");
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
 
 router.post("/lines", async (req, res) => {
-  const {
-    fk_user_id,
-    team,
-    player_name,
-    player_position,
-    player_id,
-    player_link,
-    line,
-    row,
-    jersey_number,
-    image,
-    created_at,
-    updated_at,
-  } = req.body;
+  const lines = req.body.Lines;
 
   const date = new Date();
   const unixTimestamp = Math.floor(date.getTime() / 1000);
 
-  const insertQuery = `
-        INSERT INTO \`lines\` ( fk_user_id, team, player_name, player_position, player_id, player_link, line, row, jersey_number, image, created_at, updated_at )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )
-    `;
+  let user_id = req.query.id;
 
-  const values = [
-    fk_user_id,
-    team,
-    player_name,
-    player_position,
-    player_id,
-    player_link,
-    line,
-    row,
-    jersey_number,
-    image,
-    unixTimestamp,
-    unixTimestamp,
-  ];
+  const deleteQuery = `
+      DELETE FROM \`lines\` WHERE fk_user_id = ?
+  `;
 
-  mysqlConnection.query(insertQuery, values, function (error, result) {
-    if (error) {
-      console.log(error);
-      res.status(500).send("Error inserting lines");
-    } else {
-      console.log("Lines inserted successfully", result);
-      res.status(200).send("Lines inserted successfully");
+  mysqlConnection.query(
+    deleteQuery,
+    [user_id],
+    function (deleteError, deleteResult) {
+      if (deleteError) {
+        console.log(deleteError);
+        return res.status(500).send("Something went wrong while updating");
+      }
+
+      console.log("Lines deleted successfully", deleteResult);
+
+      lines.forEach((line) => {
+        let {
+          user_id,
+          team,
+          player_name,
+          player_position,
+          player_id,
+          player_link,
+          line: lineName,
+          row,
+          jersey_number,
+          image,
+        } = line;
+
+        const insertQuery = `
+          INSERT INTO \`lines\` ( fk_user_id, team, player_name, player_position, player_id, player_link, line, row, jersey_number, image, created_at, updated_at )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )
+      `;
+
+        const values = [
+          user_id,
+          team,
+          player_name,
+          player_position,
+          player_id,
+          player_link,
+          lineName,
+          row,
+          jersey_number,
+          image,
+          unixTimestamp,
+          unixTimestamp,
+        ];
+
+        mysqlConnection.query(
+          insertQuery,
+          values,
+          function (insertError, insertResult) {
+            if (insertError) {
+              console.log(insertError);
+              return res.status(500).send("Error inserting lines");
+            }
+
+            console.log("Line inserted successfully", insertResult);
+          }
+        );
+      });
+
+      return res.status(200).send("Success");
     }
-  });
+  );
 });
 
 router.patch("/lines/:linesId", (req, res) => {
@@ -138,14 +162,17 @@ router.patch("/lines/:linesId", (req, res) => {
   );
 });
 
-router.delete("/lines/:linesId", (req, res) => {
-  const linesId = req.params.linesId;
+router.post("/lines/remove", (req, res) => {
+  const userId = req.body.id;
+  const line = req.body.line;
 
+  console.log("userId", req);
+  console.log("line", req);
   const deleteQuery = `
         DELETE FROM \`lines\`
-        WHERE id = ?
+        WHERE fk_user_id = ? AND line = ?
     `;
-  const values = [linesId];
+  const values = [userId, line];
 
   mysqlConnection.query(deleteQuery, values, function (error, result) {
     if (error) {
@@ -153,42 +180,43 @@ router.delete("/lines/:linesId", (req, res) => {
       res.status(500).send("Error deleting lines");
     } else {
       if (result.affectedRows === 0) {
-        res.status(404).send("Lines not found");
+        res.status(404).send("Something went wrong while updating");
       } else {
         console.log("Lines deleted successfully");
-        res.status(200).send("Lines deleted successfully");
+        res.status(200).send("Lines Reset");
       }
     }
   });
 });
 
-router.get("/lines", (req, res) => {
-  console.log("CHECKING>>", req.query);
+// router.get("/lines", (req, res) => {
+//   console.log("CHECKING>>", req.query);
 
-  let selectQuery;
-  let values = [];
+//   let selectQuery;
+//   let values = [];
 
-  if (req.query.id) {
-    selectQuery = `SELECT * FROM \`lines\` WHERE fk_user_id = ?`;
-    values = [req.query.id];
-  } else {
-    selectQuery = `SELECT * FROM \`lines\``;
-  }
+//   if (req.query.id) {
+//     selectQuery = `SELECT * FROM \`lines\` WHERE fk_user_id = ?`;
+//     values = [req.query.id];
+//   } else {
+//     selectQuery = `SELECT * FROM \`lines\``;
+//   }
 
-  mysqlConnection.query(selectQuery, values, function (error, results) {
-    if (error) {
-      console.log(error);
-      res.status(500).send("Error fetching news");
-    } else {
-      res.status(200).json({ status: 1, data: results });
-    }
-  });
-});
+//   mysqlConnection.query(selectQuery, values, function (error, results) {
+//     if (error) {
+//       console.log(error);
+//       res.status(500).send("Error fetching news");
+//     } else {
+//       res.status(200).json({ status: 1, data: results });
+//     }
+//   });
+// });
 
 router.get("/lines/:linesId", (req, res) => {
   const linesId = req.params.linesId;
+  console.log(req.params.linesId);
   const selectQuery = `
-        SELECT * FROM \`lines\` WHERE id = ?
+        SELECT * FROM \`lines\` WHERE fk_user_id = ?
     `;
   const values = [linesId];
 
@@ -198,9 +226,9 @@ router.get("/lines/:linesId", (req, res) => {
       res.status(500).send("Error fetching news");
     } else {
       if (results.length === 0) {
-        res.status(404).send("News not found");
+        res.status(404).send("Lines not found");
       } else {
-        res.status(200).json(results[0]);
+        res.status(200).json({ status: 1, data: results });
       }
     }
   });
